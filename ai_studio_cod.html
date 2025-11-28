@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ritam-Tac-Toe Multiplayer</title>
+    <style>
+        :root {
+            --primary: #4a90e2; /* Blue */
+            --bg: #121212;      /* Dark Background */
+            --surface: #1e1e1e; /* Card Background */
+            --text: #ffffff;
+            --accent: #ff4757;  /* Red */
+            --success: #2ecc71; /* Green */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            user-select: none; /* Prevents text selection on mobile */
+        }
+
+        .container {
+            width: 90%;
+            max-width: 400px;
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+            border: 1px solid #333;
+        }
+
+        /* Screen Management */
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        h1, h2, h3 { margin: 10px 0; }
+
+        /* Inputs & Buttons */
+        input {
+            padding: 15px;
+            width: 85%;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: #2d2d2d;
+            color: white;
+            margin-bottom: 15px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: var(--primary);
+            color: white;
+            transition: 0.2s;
+            margin: 5px;
+            width: 100%;
+        }
+        button:active { transform: scale(0.98); }
+        button.secondary { background-color: #444; }
+        button.success { background-color: var(--success); }
+
+        /* Status Bar (Online Count) */
+        .stats-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #2d2d2d;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            border: 1px solid #444;
+        }
+        .online-badge { 
+            background: var(--success); 
+            color: black; 
+            padding: 2px 8px; 
+            border-radius: 10px; 
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        /* Game Board */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 20px 0;
+        }
+        .cell {
+            background: #333;
+            height: 90px;
+            border-radius: 8px;
+            font-size: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        .cell.x { color: var(--primary); text-shadow: 0 0 10px var(--primary); }
+        .cell.o { color: var(--accent); text-shadow: 0 0 10px var(--accent); }
+
+        /* Timer Bar */
+        .timer-container {
+            width: 100%;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        .timer-fill {
+            height: 100%;
+            background: var(--accent);
+            width: 100%;
+            transition: width 1s linear;
+        }
+
+        /* Modals & Popups */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            width: 85%;
+            max-width: 320px;
+            max-height: 70vh;
+            overflow-y: auto;
+            text-align: left;
+        }
+        .user-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #333;
+        }
+        .invite-btn {
+            width: auto;
+            padding: 6px 12px;
+            font-size: 13px;
+            margin: 0;
+        }
+
+        /* Notification Toast */
+        #notification-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            padding: 15px 20px;
+            border-radius: 50px;
+            display: none;
+            z-index: 2000;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            width: 80%;
+            max-width: 300px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NOTIFICATION TOAST -->
+    <div id="notification-toast">
+        <div id="notif-message" style="margin-bottom: 10px; font-weight: bold;"></div>
+        <div style="display: flex; gap: 10px;">
+            <button id="accept-btn" style="background: white; color: var(--primary);">Play</button>
+            <button id="decline-btn" style="background: rgba(0,0,0,0.2);">X</button>
+        </div>
+    </div>
+
+    <!-- MODAL: ONLINE PLAYERS -->
+    <div id="online-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="text-align: center; border-bottom: 1px solid #444; padding-bottom: 10px;">Online Players</h3>
+            <div id="user-list">Loading...</div>
+            <button onclick="document.getElementById('online-modal').style.display='none'" class="secondary" style="margin-top:15px;">Close</button>
+        </div>
+    </div>
+
+    <!-- SCREEN 1: LOGIN -->
+    <div id="login-screen" class="container screen active">
+        <h1 style="color:var(--primary)">Tic-Tac-Toe</h1>
+        <p style="color:#aaa; font-size: 14px; margin-bottom: 20px;">Realtime Multiplayer</p>
+        <input type="text" id="username-input" placeholder="Enter Your Name">
+        <button onclick="login()">Start Game</button>
+    </div>
+
+    <!-- SCREEN 2: LOBBY -->
+    <div id="lobby-screen" class="container screen">
+        <div class="stats-bar" onclick="showOnlineUsers()">
+            <span>🟢 Online Players</span>
+            <span id="online-count" class="online-badge">0</span>
+        </div>
+        
+        <h2>Hi, <span id="display-name" style="color:var(--primary)"></span> 👋</h2>
+        <p style="color:#aaa; font-size: 14px;">Tap the <b>Online Players</b> bar above to challenge a friend, or click below for a random match.Ritam</p>
+        
+        <div style="margin-top: 30px;">
+            <button onclick="findRandomMatch()" class="success">Find Random Match</button>
+        </div>
+        <p id="lobby-status" style="color: var(--accent); margin-top: 15px; font-size: 14px; min-height: 20px;"></p>
+    </div>
+
+    <!-- SCREEN 3: GAME BOARD -->
+    <div id="game-screen" class="container screen">
+        <div class="stats-bar" style="cursor: default;">
+            <span id="opponent-name">Vs: ...</span>
+            <span id="game-symbol" style="font-weight:bold; color:var(--primary)">You: X</span>
+        </div>
+
+        <h3 id="turn-indicator">Game Starting...</h3>
+
+        <div class="board" id="board">
+            <div class="cell" onclick="handleMove(0)"></div>
+            <div class="cell" onclick="handleMove(1)"></div>
+            <div class="cell" onclick="handleMove(2)"></div>
+            <div class="cell" onclick="handleMove(3)"></div>
+            <div class="cell" onclick="handleMove(4)"></div>
+            <div class="cell" onclick="handleMove(5)"></div>
+            <div class="cell" onclick="handleMove(6)"></div>
+            <div class="cell" onclick="handleMove(7)"></div>
+            <div class="cell" onclick="handleMove(8)"></div>
+        </div>
+
+        <div class="timer-container">
+            <div id="timer-fill" class="timer-fill"></div>
+        </div>
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">15s Auto-move</p>
+
+        <button onclick="resetApp()" id="restart-btn" class="secondary" style="display:none; margin-top: 15px;">Back to Lobby</button>
+    </div>
+
+    <!-- FIREBASE LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getDatabase, ref, set, push, onValue, update, remove, onDisconnect, child, get } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+        // --- CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCw7as_RexoYbKZHBcGS47bscXfxj_8iTs",
+            authDomain: "shopping-e3ab0.firebaseapp.com",
+            databaseURL: "https://shopping-e3ab0-default-rtdb.firebaseio.com",
+            projectId: "shopping-e3ab0",
+            storageBucket: "shopping-e3ab0.firebasestorage.app",
+            messagingSenderId: "297301068816",
+            appId: "1:297301068816:web:02b29a230f429367abce95"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // --- SESSION MANAGEMENT (UNIQUE ID PER TAB) ---
+        // Using sessionStorage ensures each tab gets a unique ID, but refreshing the page keeps it.
+        let myId = sessionStorage.getItem('ttt_uid');
+        if (!myId) {
+            myId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            sessionStorage.setItem('ttt_uid', myId);
+        }
+
+        let myName = "";
+        let currentGameId = null;
+        let mySymbol = "";
+        let turnTimer = null;
+        let timeLeft = 15;
+        let isMyTurn = false;
+
+        // --- DOM REFERENCES ---
+        const screens = {
+            login: document.getElementById('login-screen'),
+            lobby: document.getElementById('lobby-screen'),
+            game: document.getElementById('game-screen')
+        };
+        const cells = document.querySelectorAll('.cell');
+
+        // --- 1. LOGIN & PRESENCE ---
+
+        window.login = function() {
+            const input = document.getElementById('username-input');
+            const name = input.value.trim();
+            if(!name) return alert("Please enter your name!");
+
+            myName = name;
+            document.getElementById('display-name').innerText = myName;
+
+            // Update Presence in Database
+            const userRef = ref(db, `presence/${myId}`);
+            set(userRef, { 
+                name: myName, 
+                status: 'online', 
+                lastSeen: Date.now() 
+            });
+            // Auto remove if tab closes
+            onDisconnect(userRef).remove();
+
+            // Listen for Global Online Count
+            onValue(ref(db, 'presence'), (snap) => {
+                document.getElementById('online-count').innerText = snap.size || 0;
+            });
+
+            // Start Listening for Invites
+            listenForInvites();
+
+            switchScreen('lobby');
+        };
+
+        function switchScreen(screenName) {
+            Object.values(screens).forEach(el => el.classList.remove('active'));
+            screens[screenName].classList.add('active');
+        }
+
+        // --- 2. ONLINE USERS & INVITE SYSTEM ---
+
+        window.showOnlineUsers = function() {
+            const list = document.getElementById('user-list');
+            const modal = document.getElementById('online-modal');
+            
+            list.innerHTML = "<div style='padding:10px; color:#888'>Loading players...</div>";
+            modal.style.display = 'flex';
+
+            get(ref(db, 'presence')).then((snap) => {
+                list.innerHTML = "";
+                if(!snap.exists() || snap.size <= 1) {
+                    list.innerHTML = "<div style='padding:10px; color:#888'>No other players online.<br>Open a new tab to test!</div>";
+                    return;
+                }
+
+                snap.forEach(childSnapshot => {
+                    const uid = childSnapshot.key;
+                    const uData = childSnapshot.val();
+
+                    if (uid !== myId) { // Don't show myself
+                        const div = document.createElement('div');
+                        div.className = 'user-item';
+                        div.innerHTML = `
+                            <span>${uData.name}</span>
+                            <button class="invite-btn" onclick="sendInvite('${uid}', '${uData.name}')">Challenge</button>
+                        `;
+                        list.appendChild(div);
+                    }
+                });
+            });
+        };
+
+        window.sendInvite = function(targetId, targetName) {
+            const gameId = 'game_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            
+            // Send invite to opponent
+            push(ref(db, `invites/${targetId}`), {
+                fromId: myId,
+                fromName: myName,
+                gameId: gameId
+            });
+
+            // Prepare Game Room
+            set(ref(db, `games/${gameId}`), {
+                status: 'waiting',
+                p1: myId,
+                p1Name: myName
+            });
+
+            currentGameId = gameId;
+            document.getElementById('online-modal').style.display = 'none';
+            document.getElementById('lobby-status').innerText = `Waiting for ${targetName} to accept...`;
+
+            // Wait for them to join
+            onValue(ref(db, `games/${gameId}`), (snap) => {
+                const data = snap.val();
+                if(data && data.p2) {
+                    // They joined!
+                    startGame(gameId, 'X', data.p2Name);
+                }
+            });
+        };
+
+        function listenForInvites() {
+            const myInvites = ref(db, `invites/${myId}`);
+            onValue(myInvites, (snap) => {
+                if(!snap.exists()) return;
+
+                // Get latest invite
+                let inviteData = null;
+                snap.forEach(c => { inviteData = c.val(); });
+
+                // Show Toast
+                const toast = document.getElementById('notification-toast');
+                document.getElementById('notif-message').innerHTML = `<span style="color:#fff">${inviteData.fromName}</span> wants to play!`;
+                toast.style.display = 'block';
+
+                // Accept Handler
+                document.getElementById('accept-btn').onclick = () => {
+                    toast.style.display = 'none';
+                    remove(myInvites); // Clear invites
+                    
+                    // Update Game Room
+                    update(ref(db, `games/${inviteData.gameId}`), {
+                        p2: myId,
+                        p2Name: myName,
+                        board: ["","","","","","","","",""],
+                        turn: 'p1' // p1 (X) starts
+                    });
+
+                    startGame(inviteData.gameId, 'O', inviteData.fromName);
+                };
+
+                // Decline Handler
+                document.getElementById('decline-btn').onclick = () => {
+                    toast.style.display = 'none';
+                    remove(myInvites);
+                };
+            });
+        }
+
+        // --- 3. RANDOM MATCHMAKING ---
+
+        window.findRandomMatch = async function() {
+            const status = document.getElementById('lobby-status');
+            status.innerText = "Searching for opponent...";
+
+            const matchRef = ref(db, 'matchmaking');
+            const snap = await get(matchRef);
+
+            if(snap.exists()) {
+                // Join first available game
+                const games = snap.val();
+                const key = Object.keys(games)[0];
+                const host = games[key];
+
+                if(host.p1 !== myId) {
+                    remove(ref(db, `matchmaking/${key}`)); // Remove from queue
+                    
+                    // Initialize actual game
+                    update(ref(db, `games/${key}`), {
+                        p2: myId,
+                        p2Name: myName,
+                        board: ["","","","","","","","",""],
+                        turn: 'p1'
+                    });
+
+                    startGame(key, 'O', host.p1Name);
+                    return;
+                }
+            }
+
+            // Create new matchmaking request
+            const newRef = push(matchRef);
+            const gameKey = newRef.key;
+            currentGameId = gameKey;
+
+            set(newRef, { p1: myId, p1Name: myName });
+            set(ref(db, `games/${gameKey}`), { p1: myId, p1Name: myName });
+
+            status.innerText = "Waiting for a random player to join...";
+            onDisconnect(newRef).remove();
+
+            // Wait for join
+            onValue(ref(db, `games/${gameKey}`), (snap) => {
+                const d = snap.val();
+                if(d && d.p2) {
+                    startGame(gameKey, 'X', d.p2Name);
+                }
+            });
+        };
+
+        // --- 4. GAMEPLAY LOGIC ---
+
+        function startGame(gameId, symbol, opName) {
+            currentGameId = gameId;
+            mySymbol = symbol; // 'X' (p1) or 'O' (p2)
+            
+            switchScreen('game');
+            document.getElementById('opponent-name').innerText = `Vs: ${opName}`;
+            document.getElementById('game-symbol').innerText = `You are: ${mySymbol}`;
+            document.getElementById('restart-btn').style.display = 'none';
+
+            // Initial clear
+            cells.forEach(c => { c.className = 'cell'; c.innerText = ''; });
+
+            // Watch Game Changes
+            onValue(ref(db, `games/${gameId}`), (snap) => {
+                const data = snap.val();
+                if(!data || !data.board) return;
+
+                renderBoard(data.board);
+                
+                // Turn Logic
+                const turnPlayer = data.turn === 'p1' ? 'X' : 'O';
+                isMyTurn = (mySymbol === turnPlayer);
+
+                const ind = document.getElementById('turn-indicator');
+                if(isMyTurn) {
+                    ind.innerText = "YOUR TURN";
+                    ind.style.color = "#2ecc71";
+                } else {
+                    ind.innerText = `${opName}'s Turn`;
+                    ind.style.color = "#fff";
+                }
+
+                // Check Result
+                const winStatus = checkWin(data.board);
+                
+                // Timer Logic
+                clearInterval(turnTimer);
+                if (!winStatus) {
+                    runTimer(isMyTurn, data.board);
+                }
+            });
+        }
+
+        window.handleMove = function(idx) {
+            if(!isMyTurn) return;
+            
+            // Read current board to ensure sync
+            get(ref(db, `games/${currentGameId}`)).then(snap => {
+                const d = snap.val();
+                if(d.board[idx] !== "") return; // Taken
+
+                const newBoard = [...d.board];
+                newBoard[idx] = mySymbol;
+                
+                const nextTurn = (d.turn === 'p1') ? 'p2' : 'p1';
+
+                update(ref(db, `games/${currentGameId}`), {
+                    board: newBoard,
+                    turn: nextTurn
+                });
+            });
+        };
+
+        function renderBoard(board) {
+            cells.forEach((c, i) => {
+                c.innerText = board[i];
+                c.className = 'cell';
+                if(board[i] === 'X') c.classList.add('x');
+                if(board[i] === 'O') c.classList.add('o');
+            });
+        }
+
+        // --- 5. TIMER & AUTO MOVE ---
+
+        function runTimer(canMove, currentBoard) {
+            timeLeft = 15;
+            const fill = document.getElementById('timer-fill');
+            fill.style.width = "100%";
+            
+            turnTimer = setInterval(() => {
+                timeLeft--;
+                fill.style.width = (timeLeft / 15 * 100) + "%";
+
+                if(timeLeft <= 0) {
+                    clearInterval(turnTimer);
+                    if(canMove) {
+                        doAutoMove(currentBoard);
+                    }
+                }
+            }, 1000);
+        }
+
+        function doAutoMove(board) {
+            // Find empty spots
+            let empty = [];
+            board.forEach((v, i) => { if(v==="") empty.push(i); });
+            
+            if(empty.length > 0) {
+                const rand = empty[Math.floor(Math.random() * empty.length)];
+                window.handleMove(rand);
+            }
+        }
+
+        // --- 6. WIN LOGIC ---
+
+        function checkWin(board) {
+            const lines = [
+                [0,1,2],[3,4,5],[6,7,8],
+                [0,3,6],[1,4,7],[2,5,8],
+                [0,4,8],[2,4,6]
+            ];
+
+            let winner = null;
+            for(let l of lines) {
+                if(board[l[0]] && board[l[0]] === board[l[1]] && board[l[0]] === board[l[2]]) {
+                    winner = board[l[0]];
+                }
+            }
+
+            if(winner) {
+                endGame(winner === mySymbol ? "YOU WON! 🎉" : "YOU LOST 💀");
+                return true;
+            }
+            if(!board.includes("")) {
+                endGame("IT'S A DRAW 🤝");
+                return true;
+            }
+            return false;
+        }
+
+        function endGame(msgText) {
+            clearInterval(turnTimer);
+            const ind = document.getElementById('turn-indicator');
+            ind.innerText = msgText;
+            ind.style.color = msgText.includes("WON") ? "#2ecc71" : (msgText.includes("LOST") ? "#ff4757" : "#f1c40f");
+            document.getElementById('restart-btn').style.display = 'block';
+        }
+
+        window.resetApp = function() {
+            location.reload();
+        };
+
+    </script>
+</body>
+</html>
